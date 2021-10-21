@@ -109,6 +109,7 @@ const getRandomImage = async (seed) => {
 		.composite(
 			inputBuffers.map((buffer) => ({input: buffer}))
 		)
+		.flip()
 		.png()
 		.toBuffer();
 };
