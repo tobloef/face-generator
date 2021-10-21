@@ -60,7 +60,7 @@ const setupParts = () => {
 				return fileNameRegex.test(partFileName);
 			});
 		if (partKeyToUse == null) {
-			throw new Error(`Invalid parts file name "${partFileName}".`)
+			return acc;
 		}
 		acc[partKeyToUse].push(partFile);
 		return acc;
@@ -109,7 +109,6 @@ const getRandomImage = async (seed) => {
 		.composite(
 			inputBuffers.map((buffer) => ({input: buffer}))
 		)
-		.flip()
 		.png()
 		.toBuffer();
 };
