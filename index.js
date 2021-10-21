@@ -9,7 +9,7 @@ const IMAGE_HEIGHT = 100;
 
 const PART_CONFIGS = {
 	background: {
-		occurrenceChance: 0,
+		occurrenceChance: 1,
 	},
 	head: {
 		occurrenceChance: 1,
