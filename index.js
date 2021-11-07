@@ -7,27 +7,30 @@ const { customAlphabet } = require('nanoid');
 const alphabet = 'abcdefghijklmnopqrstuvwxyz';
 const nanoid = customAlphabet(alphabet, 10);
 
-let partBufferFoldersMap = {};
+let partBufferCache = {};
 
 const setupParts = () => {
-	const folderNames = fs.readdirSync("./parts");
+	const versionFolderNames = fs.readdirSync("./parts");
 
-	folderNames.forEach((folderName) => {
-		const partNames = fs.readdirSync(`./parts/${folderName}`);
+	versionFolderNames.forEach((versionFolderName) => {
+		const partFolderNames = fs.readdirSync(`./parts/${versionFolderName}`);
 
-		if (partBufferFoldersMap[folderName] == null) {
-			partBufferFoldersMap[folderName] = {};
+		if (partBufferCache[versionFolderName] == null) {
+			partBufferCache[versionFolderName] = {};
 		}
 
-		partNames.forEach((partFileName) => {
-			const partFile = fs.readFileSync(`./parts/${folderName}/${partFileName}`);
-			const partName = partFileName.match(/^(.+?)( [0-9]+)?\.png$/)[1];
-
-			if (partBufferFoldersMap[folderName][partName] == null) {
-				partBufferFoldersMap[folderName][partName] = [];
+		partFolderNames.forEach((partFolderName) => {
+			if (partBufferCache[versionFolderName][partFolderName] == null) {
+				partBufferCache[versionFolderName][partFolderName] = [];
 			}
-			
-			partBufferFoldersMap[folderName][partName].push(partFile);
+
+			const partFileNames = fs.readdirSync(`./parts/${versionFolderName}/${partFolderName}`);
+
+			partFileNames.forEach((partFileName) => {
+				const partFile = fs.readFileSync(`./parts/${versionFolderName}/${partFolderName}/${partFileName}`);
+	
+				partBufferCache[versionFolderName][partFolderName].push(partFile);
+			});
 		});
 	});
 };
@@ -36,14 +39,14 @@ const randomInt = (min, max, random) => {
 	return Math.floor(random() * (max - min + 1)) + min;
 }
 
-const getRandomImage = async (folder, seed) => {
+const getRandomImage = async (version, seed) => {
 	const random = seedrandom(seed);
 
-	const inputBuffers = Object.values(partBufferFoldersMap[folder])
+	const inputBuffers = Object.values(partBufferCache[version])
 		.map((buffers) => {
 			const partIndex = randomInt(0, buffers.length - 1, random);
 			return buffers[partIndex];
-		})
+		});
 
 	const { width, height } = await sharp(inputBuffers[0]).metadata();
 
@@ -61,15 +64,15 @@ const getRandomImage = async (folder, seed) => {
 };
 
 const handle = async (req, res) => {
-	const folder = req.params.folder ?? "original";
+	const version = req.params.version ?? "original";
 	const seed = req.params.seed === "random" ? nanoid() : req.params.seed;
 
-	if (partBufferFoldersMap[folder] == null) {
-		res.status(404).send(`No version '${folder}' found. Try one of these: ${Object.keys(partBufferFoldersMap).join(", ")}.`);
+	if (partBufferCache[version] == null) {
+		res.status(404).send(`No version '${version}' found. Try one of these: ${Object.keys(partBufferCache).join(", ")}.`);
 		return;
 	}
 
-	const imageData = await getRandomImage(folder, seed);
+	const imageData = await getRandomImage(version, seed);
 
 	res.contentType('image/png');
 	res.set('Seed', seed)
@@ -79,7 +82,7 @@ const handle = async (req, res) => {
 const setupExpress = () => {
 	const app = express();
 
-	app.get('/:folder/:seed.png', handle);
+	app.get('/:version/:seed.png', handle);
 	app.get('/:seed.png', handle);
 
 	const port = process.env.PORT || 1234;
