@@ -39,11 +39,12 @@ const randomInt = (min, max, random) => {
 	return Math.floor(random() * (max - min + 1)) + min;
 }
 
-const getRandomImage = async (version, seed) => {
+const getRandomImage = async (version, seed, exclude) => {
 	const random = seedrandom(seed);
 
-	const inputBuffers = Object.values(partBufferCache[version])
-		.map((buffers) => {
+	const inputBuffers = Object.entries(partBufferCache[version])
+		.filter(([key, _]) => exclude == null || !exclude.includes(key))
+		.map(([_, buffers]) => {
 			const partIndex = randomInt(0, buffers.length - 1, random);
 			return buffers[partIndex];
 		});
@@ -75,7 +76,9 @@ const handle = async (req, res) => {
 		return;
 	}
 
-	const imageData = await getRandomImage(version, seed);
+	const exclude = req.query.exclude ?? [];
+
+	const imageData = await getRandomImage(version, seed, exclude);
 
 	res.contentType('image/png');
 	res.set('Seed', seed)
