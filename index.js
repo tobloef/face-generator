@@ -2,130 +2,85 @@ const fs = require("fs");
 const seedrandom = require("seedrandom");
 const express = require("express");
 const sharp = require("sharp");
+const { customAlphabet } = require('nanoid');
 
-const PARTS_FOLDER_PATH = "./parts";
-const IMAGE_WIDTH = 100;
-const IMAGE_HEIGHT = 100;
+const alphabet = 'abcdefghijklmnopqrstuvwxyz';
+const nanoid = customAlphabet(alphabet, 10);
 
-const PART_CONFIGS = {
-	background: {
-		occurrenceChance: 1,
-	},
-	head: {
-		occurrenceChance: 1,
-	},
-	mouth: {
-		occurrenceChance: 0.95,
-	},
-	eyes: {
-		occurrenceChance: 1,
-	},
-	nose: {
-		occurrenceChance: 0.95,
-	},
-	headgear: {
-		occurrenceChance: 0.33,
-	},
-};
-
-let partBuffersMap;
-
-const getTotalCombinations = () => {
-	return Object.entries(partBuffersMap)
-		.reduce((acc, [key, array]) => {
-			let newChoices = array.length;
-			if (PART_CONFIGS[key].occurrenceChance !== 1) {
-				newChoices += 1;
-			}
-			return acc * newChoices;
-		}, 1)
-}
+let partBufferFoldersMap = {};
 
 const setupParts = () => {
-	console.info("Reading part files...");
+	const folderNames = fs.readdirSync("./parts");
 
-	const partFileNames = fs.readdirSync(PARTS_FOLDER_PATH);
+	folderNames.forEach((folderName) => {
+		const partNames = fs.readdirSync(`./parts/${folderName}`);
 
-	const emptyPartBufferMap = Object.keys(PART_CONFIGS)
-		.reduce((acc, partKey) => {
-			acc[partKey] = [];
-			return acc;
-		}, {});
-
-	partBuffersMap = partFileNames.reduce((acc, partFileName) => {
-		const partFile = fs.readFileSync(`${PARTS_FOLDER_PATH}/${partFileName}`);
-		const partKeyToUse = Object.keys(PART_CONFIGS)
-			.find((partKey) => {
-				const fileNameRegex = new RegExp(`^${partKey}( [0-9]+)?.png$`, "i");
-				return fileNameRegex.test(partFileName);
-			});
-		if (partKeyToUse == null) {
-			return acc;
+		if (partBufferFoldersMap[folderName] == null) {
+			partBufferFoldersMap[folderName] = {};
 		}
-		acc[partKeyToUse].push(partFile);
-		return acc;
-	}, emptyPartBufferMap);
 
-	const partCounts = Object.entries(partBuffersMap)
-		.map(([key, array]) => `${key}: ${array.length}`)
-		.join(", ");
+		partNames.forEach((partFileName) => {
+			const partFile = fs.readFileSync(`./parts/${folderName}/${partFileName}`);
+			const partName = partFileName.match(/^(.+?)( [0-9]+)?\.png$/)[1];
 
-	const combinations = getTotalCombinations();
-
-	console.info(`Loaded (${partCounts}) parts.`);
-	console.info(`That's ${combinations.toLocaleString('en-US')} total combinations!`);
+			if (partBufferFoldersMap[folderName][partName] == null) {
+				partBufferFoldersMap[folderName][partName] = [];
+			}
+			
+			partBufferFoldersMap[folderName][partName].push(partFile);
+		});
+	});
 };
 
 const randomInt = (min, max, random) => {
 	return Math.floor(random() * (max - min + 1)) + min;
 }
 
-const getRandomImage = async (seed) => {
+const getRandomImage = async (folder, seed) => {
 	const random = seedrandom(seed);
 
-	const inputBuffers = Object.entries(PART_CONFIGS)
-		.reduce((acc, [key, config]) => {
-			const isOccouring = random() <= config.occurrenceChance;
-			if (!isOccouring) {
-				return acc;
-			}
+	const inputBuffers = Object.values(partBufferFoldersMap[folder])
+		.map((buffers) => {
+			const partIndex = randomInt(0, buffers.length - 1, random);
+			return buffers[partIndex];
+		})
 
-			const partIndex = randomInt(0, partBuffersMap[key].length - 1, random);
-			const partBuffer = partBuffersMap[key][partIndex];
-
-			acc.push(partBuffer);
-
-			return acc;
-		}, []);
+	const { width, height } = await sharp(inputBuffers[0]).metadata();
 
 	return await sharp({
 			create: {
-				width: IMAGE_WIDTH,
-				height: IMAGE_HEIGHT,
+				width,
+				height,
 				channels: 4,
 				background: { r: 0, g: 0, b: 0, alpha: 0 },
 			}
 		})
-		.composite(
-			inputBuffers.map((buffer) => ({input: buffer}))
-		)
+		.composite(inputBuffers.map((buffer) => ({input: buffer})))
 		.png()
 		.toBuffer();
 };
 
+const handle = async (req, res) => {
+	const folder = req.params.folder ?? "original";
+	const seed = req.params.seed === "random" ? nanoid() : req.params.seed;
+
+	if (partBufferFoldersMap[folder] == null) {
+		res.status(404).send(`No version '${folder}' found. Try one of these: ${Object.keys(partBufferFoldersMap).join(", ")}.`);
+		return;
+	}
+
+	const imageData = await getRandomImage(folder, seed);
+
+	res.contentType('image/png');
+	res.set('Seed', seed)
+	res.end(imageData, 'binary');
+}
+
 const setupExpress = () => {
 	const app = express();
 
-	app.get('/:seed.png', async (req, res) => {
-		let seed = req.params.seed === "random"
-			? Math.random()
-			: req.params.seed;
-
-		const imageData = await getRandomImage(seed);
-
-		res.contentType('image/png');
-		res.end(imageData, 'binary');
-	});
+	app.get('/:folder/:seed.png', handle);
+	app.get('/:seed.png', handle);
 
 	const port = process.env.PORT || 1234;
 
