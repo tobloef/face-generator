@@ -39,11 +39,13 @@ const randomInt = (min, max, random) => {
 	return Math.floor(random() * (max - min + 1)) + min;
 }
 
-const getRandomImage = async (version, seed) => {
+const getRandomImage = async (version, seed, config) => {
 	const random = seedrandom(seed);
 
-	const inputBuffers = Object.values(partBufferCache[version])
-		.map((buffers) => {
+	const inputBuffers = Object.entries(partBufferCache[version])
+		.filter(([key, value]) => {
+			return config[key.substring(2,key.length)] != 0
+		}).map(([_, buffers]) => {
 			const partIndex = randomInt(0, buffers.length - 1, random);
 			return buffers[partIndex];
 		});
@@ -72,7 +74,15 @@ const handle = async (req, res) => {
 		return;
 	}
 
-	const imageData = await getRandomImage(version, seed);
+	var config = {}
+
+	if(req.params.seed === "random"){
+		for(const property in req.query){
+			config[property] = parseInt(req.query[property]);
+		}
+	}
+
+	const imageData = await getRandomImage(version, seed, config);
 
 	res.contentType('image/png');
 	res.set('Seed', seed)
