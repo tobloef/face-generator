@@ -13,8 +13,5 @@ A few examples:
 ![](https://server.tobloef.com/faces/9.png)
 ![](https://server.tobloef.com/faces/nice.png)
 ![](https://server.tobloef.com/faces/6.png)
-![](https://server.tobloef.com/faces/7.png)
 ![](https://server.tobloef.com/faces/27.png)
 ![](https://server.tobloef.com/faces/10.png)
-![](https://server.tobloef.com/faces/aa.png)
-![](https://server.tobloef.com/faces/bb.png)
